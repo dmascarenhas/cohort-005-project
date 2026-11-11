@@ -110,5 +110,9 @@ A message Cadence sends a person to tell them something that concerns them has h
 _Avoid_: Alert, Message, Activity
 
 **Notification Feed**:
-The place inside Cadence where a person sees their Notifications.
+The place inside Cadence where a person sees their Notifications. A person has one Notification Feed, whatever roles they hold, and every Notification appears in it.
 _Avoid_: Inbox, Activity feed
+
+**Channel**:
+A way a Notification reaches a person. Cadence has two: the Notification Feed and email. Every Notification goes to the Notification Feed; some also go by email.
+_Avoid_: Medium, Transport, Provider
