@@ -3,6 +3,11 @@ import type { Route } from "./+types/layout.app";
 import { Sidebar } from "~/components/sidebar";
 import { DevUI } from "~/components/dev-ui";
 import { Toaster } from "sonner";
+import {
+  FeedPrototypeProvider,
+  FeedPrototypeSwitcher,
+  type FeedPrototypeData,
+} from "~/components/notification-feed-prototype";
 import { getCurrentUserId, getDevCountry } from "~/lib/session";
 import { getCountryTierInfo, COUNTRIES } from "~/lib/ppp";
 import { eq, and, or, sql, desc } from "drizzle-orm";
@@ -171,6 +176,34 @@ function getRecentlyProgressedCourses(userId: number, limit: number = 3) {
     .all();
 }
 
+// PROTOTYPE: real names for the mocked Notification Feed.
+function getFeedPrototypeData(userId: number | null): FeedPrototypeData {
+  const owned = userId
+    ? db.select().from(courses).where(eq(courses.instructorId, userId)).get()
+    : undefined;
+  const course = owned ?? db.select().from(courses).get();
+  const mod = course
+    ? db.select().from(modules).where(eq(modules.courseId, course.id)).get()
+    : undefined;
+  const lesson = mod
+    ? db.select().from(lessons).where(eq(lessons.moduleId, mod.id)).get()
+    : undefined;
+  const people = db
+    .select({ id: users.id, name: users.name })
+    .from(users)
+    .all()
+    .filter((u) => u.id !== userId)
+    .slice(0, 3)
+    .map((u) => u.name);
+  return {
+    course: course
+      ? { id: course.id, title: course.title, slug: course.slug }
+      : null,
+    lesson: lesson ? { id: lesson.id, title: lesson.title } : null,
+    people,
+  };
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
   const users = getAllUsers();
   const currentUserId = await getCurrentUserId(request);
@@ -213,6 +246,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     countryTierInfo,
     countries: COUNTRIES,
     isTeamAdmin: currentUserId ? isTeamAdmin(currentUserId) : false,
+    feedPrototype: getFeedPrototypeData(currentUserId),
   };
 }
 
@@ -225,9 +259,16 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
     countryTierInfo,
     countries,
     isTeamAdmin: userIsTeamAdmin,
+    feedPrototype,
   } = loaderData;
 
   return (
+    <FeedPrototypeProvider
+      role={currentUser?.role ?? null}
+      userId={currentUser?.id ?? null}
+      isTeamAdmin={userIsTeamAdmin}
+      data={feedPrototype}
+    >
     <div className="flex h-screen overflow-hidden">
       <Sidebar
         currentUser={currentUser}
@@ -245,6 +286,8 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
         countries={countries}
       />
       <Toaster position="bottom-right" richColors closeButton />
+      {currentUser && <FeedPrototypeSwitcher />}
     </div>
+    </FeedPrototypeProvider>
   );
 }
