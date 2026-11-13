@@ -1,0 +1,37 @@
+{
+  "name": "Role changed",
+  "description": "A Platform Admin changed this person's role. Sent by Cadence; data is { newRole, url }.",
+  "steps": [
+    {
+      "type": "channel",
+      "template": {
+        "action_url": "{{ data.url }}",
+        "markdown_body@": "in_app_feed_1/markdown_body.md"
+      },
+      "ref": "in_app_feed_1",
+      "channel_type": "in_app_feed",
+      "channel_key": "in-app"
+    },
+    {
+      "type": "channel",
+      "template": {
+        "subject": "Your role on Cadence has changed",
+        "settings": {
+          "layout_key": "default",
+          "attachment_key": "attachments"
+        },
+        "html_body@": "email_1/html_body.html"
+      },
+      "ref": "email_1",
+      "channel_type": "email",
+      "channel_key": "knock-email"
+    }
+  ],
+  "trigger_frequency": "every_trigger",
+  "__readonly": {
+    "key": "role-changed",
+    "active": true,
+    "valid": true
+  },
+  "$schema": "https://schemas.knock.app/cli/workflow.json"
+}

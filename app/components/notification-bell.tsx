@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRevalidator } from "react-router";
-import { Bell } from "lucide-react";
+import { useNavigate, useRevalidator } from "react-router";
+import { Bell, UserCog } from "lucide-react";
 import { z } from "zod";
 import {
   KnockFeedProvider,
@@ -9,6 +9,12 @@ import {
   useNotificationStore,
 } from "@knocklabs/react-core";
 import type { FeedConnection } from "~/lib/knock.server";
+import {
+  describeNotification,
+  type DescribedNotification,
+  type NotificationIcon,
+} from "~/lib/notification-sentences";
+import { cn, formatRelativeTime } from "~/lib/utils";
 
 // ─── Notification Feed ───
 // A bell in the sidebar header that opens the person's Notification Feed as a
@@ -106,6 +112,14 @@ function BellDropdown() {
   const { items, metadata } = useNotificationStore(feedClient);
   const [open, setOpen] = useState(false);
   const unread = metadata.unread_count;
+  const navigate = useNavigate();
+
+  // Items Cadence can't describe (an unknown workflow, or data that breaks
+  // its contract) are left out rather than shown as blank rows.
+  const rows = items.flatMap((item) => {
+    const described = describeNotification(item.source.key, item.data);
+    return described ? [{ item, described }] : [];
+  });
 
   useEffect(() => {
     void feedClient.fetch();
@@ -127,10 +141,31 @@ function BellDropdown() {
           <div className="absolute left-0 top-10 z-50 w-96 overflow-hidden rounded-lg border bg-popover text-popover-foreground shadow-xl">
             <div className="flex items-center justify-between border-b px-4 py-3">
               <span className="text-sm font-semibold">Notifications</span>
+              {unread > 0 && (
+                <button
+                  type="button"
+                  onClick={() => void feedClient.markAllAsRead()}
+                  className="text-xs font-medium text-primary hover:underline"
+                >
+                  Mark all as read
+                </button>
+              )}
             </div>
             <div className="max-h-[28rem] overflow-y-auto">
-              {/* Rows come with the first kind of Notification Cadence sends. */}
-              {items.length === 0 && <EmptyFeed />}
+              {rows.length === 0 && <EmptyFeed />}
+              {rows.map(({ item, described }) => (
+                <FeedRow
+                  key={item.id}
+                  described={described}
+                  insertedAt={item.inserted_at}
+                  unread={item.read_at === null}
+                  onOpen={() => {
+                    void feedClient.markAsRead(item);
+                    setOpen(false);
+                    navigate(described.url);
+                  }}
+                />
+              ))}
             </div>
           </div>
         </>
@@ -164,6 +199,57 @@ function BellButton({
         <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
           {unread > 9 ? "9+" : unread}
         </span>
+      )}
+    </button>
+  );
+}
+
+const ICONS: Record<NotificationIcon, React.ReactNode> = {
+  role: <UserCog className="size-4" />,
+};
+
+function FeedRow({
+  described,
+  insertedAt,
+  unread,
+  onOpen,
+}: {
+  described: DescribedNotification;
+  insertedAt: string;
+  unread: boolean;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={cn(
+        "flex w-full gap-3 border-b px-4 py-3 text-left text-sm last:border-b-0 hover:bg-accent",
+        unread && "bg-primary/5"
+      )}
+    >
+      <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+        {ICONS[described.icon]}
+      </span>
+      <span className="flex-1 text-muted-foreground">
+        {described.parts.map((part, index) =>
+          typeof part === "string" ? (
+            <span key={index}>{part}</span>
+          ) : (
+            <strong key={index} className="font-semibold text-foreground">
+              {part.strong}
+            </strong>
+          )
+        )}
+        <span className="mt-1 block text-xs text-muted-foreground/70">
+          {formatRelativeTime(insertedAt)}
+        </span>
+      </span>
+      {unread && (
+        <span
+          className="mt-2 size-2 shrink-0 rounded-full bg-primary"
+          aria-label="Unread"
+        />
       )}
     </button>
   );
