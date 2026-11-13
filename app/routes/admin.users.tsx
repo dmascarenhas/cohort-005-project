@@ -8,6 +8,8 @@ import { parseFormData } from "~/lib/validation";
 import { UserRole, users } from "~/db/schema";
 import { db } from "~/db";
 import { eq } from "drizzle-orm";
+import { changeUserRole } from "~/lib/users.server";
+import { sendNotifications } from "~/lib/knock.server";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -52,15 +54,6 @@ function updateUser(
   return db
     .update(users)
     .set({ name, email, bio })
-    .where(eq(users.id, id))
-    .returning()
-    .get();
-}
-
-function updateUserRole(id: number, role: UserRole) {
-  return db
-    .update(users)
-    .set({ role })
     .where(eq(users.id, id))
     .returning()
     .get();
@@ -125,7 +118,11 @@ export async function action({ request }: Route.ActionArgs) {
 
   if (intent === "update-role") {
     const { userId, role } = parsed.data;
-    updateUserRole(userId, role);
+    const result = changeUserRole(db, currentUser.id, userId, role);
+    if (!result.ok) {
+      return data({ error: result.error }, { status: result.status });
+    }
+    await sendNotifications(result.notifications);
     return { success: true };
   }
 
