@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { UserRole } from "~/db/schema";
+import { CourseStatus, UserRole } from "~/db/schema";
 
 // ─── Notifications ───
 // What Cadence sends Knock, shared by the server (which triggers Notifications)
@@ -12,6 +12,17 @@ import { UserRole } from "~/db/schema";
 export const notificationDataSchemas = {
   "role-changed": z.object({
     newRole: z.nativeEnum(UserRole),
+    url: z.string(),
+  }),
+  "course-rated": z.object({
+    actorName: z.string(),
+    courseTitle: z.string(),
+    rating: z.number().int(),
+    url: z.string(),
+  }),
+  "course-status-changed": z.object({
+    courseTitle: z.string(),
+    newStatus: z.nativeEnum(CourseStatus),
     url: z.string(),
   }),
 } satisfies Record<string, z.ZodType<{ url: string }>>;
