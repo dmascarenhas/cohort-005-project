@@ -14,6 +14,19 @@ export const notificationDataSchemas = {
     newRole: z.nativeEnum(UserRole),
     url: z.string(),
   }),
+  // ── Seat claimed and New Enrollment (#15) ──
+  "seat-claimed": z.object({
+    actorName: z.string(),
+    courseTitle: z.string(),
+    unclaimedSeats: z.number(),
+    totalSeats: z.number(),
+    url: z.string(),
+  }),
+  "new-enrollment": z.object({
+    actorName: z.string(),
+    courseTitle: z.string(),
+    url: z.string(),
+  }),
   // ── Refund decisions (#12) ──
   "refund-request-approved": z.object({
     courseTitle: z.string(),

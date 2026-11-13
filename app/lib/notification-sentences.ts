@@ -15,7 +15,13 @@ import {
 /** Text runs of a sentence; `{ strong }` runs are shown in bold. */
 export type SentencePart = string | { strong: string };
 
-export type NotificationIcon = "role" | "refund";
+export type NotificationIcon =
+  | "role"
+  // ── Seat claimed and New Enrollment (#15) ──
+  | "seat"
+  | "enrollment"
+  // ── Refund decisions (#12) ──
+  | "refund";
 
 export type DescribedNotification = {
   icon: NotificationIcon;
@@ -37,6 +43,20 @@ const describers: {
   "role-changed": ({ newRole }) => ({
     icon: "role",
     parts: ["A Platform Admin made you ", { strong: ROLE_WITH_ARTICLE[newRole] }, "."],
+  }),
+  // ── Seat claimed and New Enrollment (#15) ──
+  "seat-claimed": ({ actorName, courseTitle, unclaimedSeats, totalSeats }) => ({
+    icon: "seat",
+    parts: [
+      { strong: actorName },
+      " claimed a Seat on your Team Licence for ",
+      { strong: courseTitle },
+      `. ${unclaimedSeats} of ${totalSeats} Seats are still unclaimed.`,
+    ],
+  }),
+  "new-enrollment": ({ actorName, courseTitle }) => ({
+    icon: "enrollment",
+    parts: [{ strong: actorName }, " enrolled on ", { strong: courseTitle }, "."],
   }),
   // ── Refund decisions (#12) ──
   "refund-request-approved": ({ courseTitle, amount }) => ({
@@ -125,6 +145,8 @@ function describeAs<K extends WorkflowKey>(
   const parsed = schema.safeParse(data);
   if (!parsed.success) return null;
 
+  // TypeScript can't pair describers[key] with schemas[key] through a union
+  // key, but parsed.data was just checked against this key's own schema.
   const describe: (data: NotificationData<K>) => Omit<DescribedNotification, "url"> =
     describers[workflowKey];
   return { ...describe(parsed.data), url: parsed.data.url };
