@@ -1,4 +1,4 @@
-import { UserRole } from "~/db/schema";
+import { CourseStatus, UserRole } from "~/db/schema";
 import {
   notificationDataSchemas,
   type NotificationData,
@@ -14,7 +14,19 @@ import {
 /** Text runs of a sentence; `{ strong }` runs are shown in bold. */
 export type SentencePart = string | { strong: string };
 
-export type NotificationIcon = "role" | "question" | "reply";
+export type NotificationIcon =
+  | "role"
+  // ── Seat claimed and New Enrollment (#15) ──
+  | "seat"
+  | "enrollment"
+  // ── Refund decisions (#12) ──
+  | "refund"
+  // ── Course rated and Course status changed (#16) ──
+  | "rating"
+  | "course-status"
+  // ── Discussions (#14) ──
+  | "question"
+  | "reply";
 
 export type DescribedNotification = {
   icon: NotificationIcon;
@@ -28,6 +40,13 @@ const ROLE_WITH_ARTICLE: Record<UserRole, string> = {
   [UserRole.Admin]: "a Platform Admin",
 };
 
+/** "A Platform Admin {published / archived / moved} {Course}[ to Draft]." */
+const STATUS_CHANGE_VERB: Record<CourseStatus, string> = {
+  [CourseStatus.Published]: "published",
+  [CourseStatus.Archived]: "archived",
+  [CourseStatus.Draft]: "moved",
+};
+
 const describers: {
   [K in WorkflowKey]: (
     data: NotificationData<K>
@@ -36,6 +55,88 @@ const describers: {
   "role-changed": ({ newRole }) => ({
     icon: "role",
     parts: ["A Platform Admin made you ", { strong: ROLE_WITH_ARTICLE[newRole] }, "."],
+  }),
+  // ── Seat claimed and New Enrollment (#15) ──
+  "seat-claimed": ({ actorName, courseTitle, unclaimedSeats, totalSeats }) => ({
+    icon: "seat",
+    parts: [
+      { strong: actorName },
+      " claimed a Seat on your Team Licence for ",
+      { strong: courseTitle },
+      `. ${unclaimedSeats} of ${totalSeats} Seats are still unclaimed.`,
+    ],
+  }),
+  "new-enrollment": ({ actorName, courseTitle }) => ({
+    icon: "enrollment",
+    parts: [{ strong: actorName }, " enrolled on ", { strong: courseTitle }, "."],
+  }),
+  // ── Refund decisions (#12) ──
+  "refund-request-approved": ({ courseTitle, amount }) => ({
+    icon: "refund",
+    parts: [
+      "Your Refund Request for ",
+      { strong: courseTitle },
+      ` was approved. ${amount} is on its way back to you.`,
+    ],
+  }),
+  "refund-request-declined": ({ courseTitle, note }) => ({
+    icon: "refund",
+    parts: [
+      "Your Refund Request for ",
+      { strong: courseTitle },
+      ` was declined: "${note}". You can raise a new one.`,
+    ],
+  }),
+  "team-licence-refund-request-approved": ({
+    courseTitle,
+    amount,
+    cancelledSeats,
+  }) => ({
+    icon: "refund",
+    parts: [
+      "Your Refund Request for the ",
+      { strong: courseTitle },
+      ` Team Licence was approved. ${amount} is on its way back to you, and its ${unclaimedSeats(cancelledSeats)} can no longer be claimed.`,
+    ],
+  }),
+  "team-licence-refund-request-declined": ({ courseTitle, note }) => ({
+    icon: "refund",
+    parts: [
+      "Your Refund Request for the ",
+      { strong: courseTitle },
+      ` Team Licence was declined: "${note}". Its Unclaimed Seats can be claimed again.`,
+    ],
+  }),
+  "enrollment-refunded": (data) => ({
+    icon: "refund",
+    parts: [
+      "A Refund Request for ",
+      { strong: data.courseTitle },
+      " was approved. ",
+      ...(data.purchaseType === "individual"
+        ? [{ strong: data.studentName }, " no longer has an Enrollment."]
+        : [
+            `${unclaimedSeats(data.cancelledSeats)} ${data.cancelledSeats === 1 ? "was" : "were"} cancelled.`,
+          ]),
+    ],
+  }),
+  // ── end refund decisions ──
+  "course-rated": ({ actorName, courseTitle, rating }) => ({
+    icon: "rating",
+    parts: [
+      { strong: actorName },
+      " rated ",
+      { strong: courseTitle },
+      ` ${rating}/5.`,
+    ],
+  }),
+  "course-status-changed": ({ courseTitle, newStatus }) => ({
+    icon: "course-status",
+    parts: [
+      `A Platform Admin ${STATUS_CHANGE_VERB[newStatus]} `,
+      { strong: courseTitle },
+      newStatus === CourseStatus.Draft ? " to Draft." : ".",
+    ],
   }),
   // Discussions (#14)
   "new-discussion-question": ({ actorName, lessonTitle, courseTitle }) => ({
@@ -75,6 +176,10 @@ const describers: {
   }),
 };
 
+function unclaimedSeats(count: number): string {
+  return `${count} Unclaimed ${count === 1 ? "Seat" : "Seats"}`;
+}
+
 function isWorkflowKey(key: string): key is WorkflowKey {
   return Object.hasOwn(notificationDataSchemas, key);
 }
@@ -89,11 +194,12 @@ export function describeNotification(
   data: unknown
 ): DescribedNotification | null {
   if (!isWorkflowKey(workflowKey)) return null;
-  return describeKnown(workflowKey, data);
+  return describeAs(workflowKey, data);
 }
 
-// The schemas seen only as parsers, as a mapped type over the workflow keys,
-// so indexing with a generic key keeps the key and its data type together.
+// The schemas seen as one parser per key. Assigning the real schemas here is
+// checked key by key, and indexing a mapped type with a generic key lets
+// TypeScript tie that key's parsed data to that key's describer.
 const parsers: {
   [K in WorkflowKey]: {
     safeParse(
@@ -102,9 +208,7 @@ const parsers: {
   };
 } = notificationDataSchemas;
 
-// Generic over the key, so the parsed data and its describer stay tied to the
-// same workflow instead of widening to a union of all of them.
-function describeKnown<K extends WorkflowKey>(
+function describeAs<K extends WorkflowKey>(
   workflowKey: K,
   data: unknown
 ): DescribedNotification | null {
@@ -115,7 +219,6 @@ function describeKnown<K extends WorkflowKey>(
     DescribedNotification,
     "url"
   > = describers[workflowKey];
-
   return { ...describe(parsed.data), url: parsed.data.url };
 }
 

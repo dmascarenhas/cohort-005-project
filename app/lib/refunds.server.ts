@@ -17,6 +17,7 @@ import {
   RefundStatus,
 } from "~/db/schema";
 import { formatPrice } from "~/lib/utils";
+import { notify, type Notification } from "~/lib/notifications";
 import {
   REFUND_COMPLETION_LIMIT,
   REFUND_WATCH_LIMIT_SECONDS,
@@ -568,7 +569,9 @@ export function listTeamLicences(db: Queryable, buyerId: number, now: Date) {
 
 // ─── Deciding a Refund Request ───
 
-export type DecisionResult = { ok: true; email: Email } | Failure;
+export type DecisionResult =
+  | { ok: true; notifications: Notification[] }
+  | Failure;
 
 function findOpenRefundRequest(
   tx: Queryable,
@@ -624,6 +627,7 @@ export function approveRefundRequest(
 
     const { purchase } = found;
     const seats = getSeats(tx, purchase.id);
+    let outcome: DecisionOutcome;
 
     if (kindOf(seats) === "team_licence") {
       if (seats.some(isClaimed)) {
@@ -634,6 +638,12 @@ export function approveRefundRequest(
             "A Seat on this Team Licence has been claimed, so this refund request can only be declined.",
         };
       }
+
+      outcome = {
+        decision: "approved",
+        kind: "team_licence",
+        cancelledSeats: seats.filter((seat) => seat.refundedAt === null).length,
+      };
 
       tx.update(coupons)
         .set({ refundedAt: now.toISOString() })
@@ -664,6 +674,12 @@ export function approveRefundRequest(
           )
           .run();
       }
+
+      outcome = {
+        decision: "approved",
+        kind: "individual_purchase",
+        keptEnrollment: claimedSeat !== undefined,
+      };
     }
 
     tx.update(refunds)
@@ -679,7 +695,12 @@ export function approveRefundRequest(
 
     return {
       ok: true,
-      email: buildDecisionEmail(tx, purchase, RefundStatus.Approved, note),
+      notifications: buildDecisionNotifications(
+        tx,
+        purchase,
+        platformAdminId,
+        outcome
+      ),
     };
   });
 }
@@ -722,23 +743,43 @@ export function declineRefundRequest(
 
     return {
       ok: true,
-      email: buildDecisionEmail(
+      notifications: buildDecisionNotifications(
         tx,
         found.purchase,
-        RefundStatus.Declined,
-        trimmedNote
+        platformAdminId,
+        {
+          decision: "declined",
+          kind: kindOf(getSeats(tx, found.purchase.id)),
+          note: trimmedNote,
+        }
       ),
     };
   });
 }
 
-/** The email the buyer gets once their Refund Request is decided. */
-function buildDecisionEmail(
+/** What a decision did, for the Notifications it produces. */
+type DecisionOutcome =
+  | {
+      decision: "approved";
+      kind: "individual_purchase";
+      /** The buyer also holds a Claimed Seat, so keeps the course (ADR 0004). */
+      keptEnrollment: boolean;
+    }
+  | { decision: "approved"; kind: "team_licence"; cancelledSeats: number }
+  | { decision: "declined"; kind: PurchaseKind; note: string };
+
+/**
+ * Who hears about a decided Refund Request: the buyer (as the Team Admin, for
+ * a Team Licence) and, on approval, the course's owner. The decision comes
+ * from Cadence, so there is no actor, but the Platform Admin who decided is
+ * never told about their own decision.
+ */
+function buildDecisionNotifications(
   db: Queryable,
   purchase: Purchase,
-  decision: RefundStatus.Approved | RefundStatus.Declined,
-  note: string | null
-): Email {
+  platformAdminId: number,
+  outcome: DecisionOutcome
+): Notification[] {
   const buyer = db
     .select()
     .from(users)
@@ -749,33 +790,69 @@ function buildDecisionEmail(
     .from(courses)
     .where(eq(courses.id, purchase.courseId))
     .get();
+  if (!buyer || !course) return [];
 
-  const courseTitle = course?.title ?? "your course";
-  const noteLines = note ? ["", note] : [];
+  const owner = db
+    .select()
+    .from(users)
+    .where(eq(users.id, course.instructorId))
+    .get();
 
-  const middle =
-    decision === RefundStatus.Approved
-      ? [
-          `We have approved your refund request for "${courseTitle}".`,
-          `${formatPrice(purchase.amountPaid)}, the full amount you paid, is on its way back to you.`,
-          ...noteLines,
-        ]
-      : [
-          `We have looked at your refund request for "${courseTitle}" and decided not to refund it.`,
-          ...noteLines,
-          "",
-          "You still have everything you bought. If something changes, you can raise a new refund request.",
-        ];
+  const notPlatformAdmin = (person: typeof buyer) => person.id !== platformAdminId;
+  const toBuyer = [buyer].filter(notPlatformAdmin);
+  const toOwner = owner ? [owner].filter(notPlatformAdmin) : [];
 
-  return {
-    to: buyer?.email ?? "",
-    subject: `Refund ${decision} — ${courseTitle}`,
-    body: [
-      `Hi ${buyer?.name ?? "there"},`,
-      "",
-      ...middle,
-      "",
-      "— The Cadence team",
-    ].join("\n"),
-  };
+  const courseTitle = course.title;
+  const amount = formatPrice(purchase.amountPaid);
+  const coursePage = `/courses/${course.slug}`;
+  const studentsList = `/instructor/${course.id}/students`;
+
+  if (outcome.decision === "declined") {
+    return outcome.kind === "team_licence"
+      ? notify("team-licence-refund-request-declined", toBuyer, null, {
+          courseTitle,
+          note: outcome.note,
+          url: "/team",
+        })
+      : notify("refund-request-declined", toBuyer, null, {
+          courseTitle,
+          note: outcome.note,
+          url: coursePage,
+        });
+  }
+
+  if (outcome.kind === "team_licence") {
+    return [
+      ...notify("team-licence-refund-request-approved", toBuyer, null, {
+        courseTitle,
+        amount,
+        cancelledSeats: outcome.cancelledSeats,
+        url: "/team",
+      }),
+      ...notify("enrollment-refunded", toOwner, null, {
+        courseTitle,
+        purchaseType: "team-licence",
+        cancelledSeats: outcome.cancelledSeats,
+        url: studentsList,
+      }),
+    ];
+  }
+
+  return [
+    ...notify("refund-request-approved", toBuyer, null, {
+      courseTitle,
+      amount,
+      url: coursePage,
+    }),
+    // A buyer who also holds a Claimed Seat keeps their Enrollment, so the
+    // owner would be told something untrue; they hear nothing instead.
+    ...(outcome.keptEnrollment
+      ? []
+      : notify("enrollment-refunded", toOwner, null, {
+          courseTitle,
+          purchaseType: "individual",
+          studentName: buyer.name,
+          url: studentsList,
+        })),
+  ];
 }

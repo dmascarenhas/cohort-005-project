@@ -356,16 +356,18 @@ describe("approving a Refund Request", () => {
     });
   });
 
-  it("emails the buyer that the refund is on its way", () => {
+  it("tells the buyer the refund is on its way", () => {
     const purchase = buyForSelf(base.user.id);
     const id = raise(purchase.id, base.user.id);
 
     const result = approveRefundRequest(db, id, platformAdmin.id, null, NOW);
 
     if (!result.ok) throw new Error(result.error);
-    expect(result.email.to).toBe("test@example.com");
-    expect(result.email.subject).toBe("Refund approved — Test Course");
-    expect(result.email.body).toContain("$79.00");
+    expect(result.notifications[0]).toMatchObject({
+      workflow: "refund-request-approved",
+      recipients: [{ id: String(base.user.id), email: "test@example.com" }],
+      data: { amount: "$79.00" },
+    });
   });
 });
 
@@ -393,7 +395,10 @@ describe("declining a Refund Request", () => {
     );
 
     if (!result.ok) throw new Error(result.error);
-    expect(result.email.body).toContain("You finished the course.");
+    expect(result.notifications[0]).toMatchObject({
+      workflow: "refund-request-declined",
+      data: { note: "You finished the course." },
+    });
     expect(isEnrolled(base.user.id)).toBe(true);
     expect(checkRefundRequest(db, purchase.id, base.user.id, NOW).ok).toBe(true);
   });
@@ -500,5 +505,188 @@ describe("listing Refund Requests", () => {
       { seatCount: 2, claimedSeatCount: 1, canRequestRefund: false },
       { seatCount: 2, claimedSeatCount: 0, canRequestRefund: true },
     ]);
+  });
+});
+
+describe("Notifications from a Refund Request decision", () => {
+  const buyer = () => ({
+    id: String(base.user.id),
+    name: "Test User",
+    email: "test@example.com",
+    avatar: null,
+  });
+  const owner = () => ({
+    id: String(base.instructor.id),
+    name: "Test Instructor",
+    email: "instructor@example.com",
+    avatar: null,
+  });
+
+  it("tells the buyer and the course owner when an Individual Purchase is refunded", () => {
+    const purchase = buyForSelf(base.user.id);
+    const id = raise(purchase.id, base.user.id);
+
+    const result = approveRefundRequest(db, id, platformAdmin.id, null, NOW);
+
+    expect(result).toEqual({
+      ok: true,
+      notifications: [
+        {
+          workflow: "refund-request-approved",
+          recipients: [buyer()],
+          actor: null,
+          data: {
+            courseTitle: "Test Course",
+            amount: "$79.00",
+            url: "/courses/test-course",
+          },
+        },
+        {
+          workflow: "enrollment-refunded",
+          recipients: [owner()],
+          actor: null,
+          data: {
+            courseTitle: "Test Course",
+            purchaseType: "individual",
+            studentName: "Test User",
+            url: `/instructor/${base.course.id}/students`,
+          },
+        },
+      ],
+    });
+  });
+
+  it("tells only the buyer when a declined Individual Purchase keeps everything", () => {
+    const purchase = buyForSelf(base.user.id);
+    const id = raise(purchase.id, base.user.id);
+
+    const result = declineRefundRequest(db, id, platformAdmin.id, "  Too late.  ", NOW);
+
+    expect(result).toEqual({
+      ok: true,
+      notifications: [
+        {
+          workflow: "refund-request-declined",
+          recipients: [buyer()],
+          actor: null,
+          data: {
+            courseTitle: "Test Course",
+            note: "Too late.",
+            url: "/courses/test-course",
+          },
+        },
+      ],
+    });
+  });
+
+  it("tells the Team Admin and the owner how many Unclaimed Seats a Team Licence refund cancels", () => {
+    const priya = addLearner("Priya");
+    const { purchase } = buySeats(priya.id, 3);
+    const id = raise(purchase.id, priya.id);
+
+    const result = approveRefundRequest(db, id, platformAdmin.id, null, NOW);
+
+    if (!result.ok) throw new Error(result.error);
+    expect(result.notifications).toEqual([
+      {
+        workflow: "team-licence-refund-request-approved",
+        recipients: [
+          { id: String(priya.id), name: "Priya", email: "priya@example.com", avatar: null },
+        ],
+        actor: null,
+        data: {
+          courseTitle: "Test Course",
+          amount: "$237.00",
+          cancelledSeats: 3,
+          url: "/team",
+        },
+      },
+      {
+        workflow: "enrollment-refunded",
+        recipients: [owner()],
+        actor: null,
+        data: {
+          courseTitle: "Test Course",
+          purchaseType: "team-licence",
+          cancelledSeats: 3,
+          url: `/instructor/${base.course.id}/students`,
+        },
+      },
+    ]);
+  });
+
+  it("tells the Team Admin, with the note, when a Team Licence refund is declined", () => {
+    const priya = addLearner("Priya");
+    const { purchase } = buySeats(priya.id, 2);
+    const id = raise(purchase.id, priya.id);
+
+    const result = declineRefundRequest(db, id, platformAdmin.id, "Seats are in use.", NOW);
+
+    if (!result.ok) throw new Error(result.error);
+    expect(result.notifications).toEqual([
+      {
+        workflow: "team-licence-refund-request-declined",
+        recipients: [
+          { id: String(priya.id), name: "Priya", email: "priya@example.com", avatar: null },
+        ],
+        actor: null,
+        data: {
+          courseTitle: "Test Course",
+          note: "Seats are in use.",
+          url: "/team",
+        },
+      },
+    ]);
+  });
+
+  it("doesn't tell the owner a buyer lost an Enrollment they kept through a Claimed Seat", () => {
+    const priya = addLearner("Priya");
+    const { seats } = buySeats(priya.id, 2);
+    claimSeat(seats[0].id, base.user.id);
+    const purchase = db
+      .insert(schema.purchases)
+      .values({
+        userId: base.user.id,
+        courseId: base.course.id,
+        amountPaid: 7900,
+        createdAt: daysBefore(2),
+      })
+      .returning()
+      .get();
+    const id = raise(purchase.id, base.user.id);
+
+    const result = approveRefundRequest(db, id, platformAdmin.id, null, NOW);
+
+    if (!result.ok) throw new Error(result.error);
+    expect(result.notifications.map((n) => n.workflow)).toEqual([
+      "refund-request-approved",
+    ]);
+  });
+
+  it("never tells the Platform Admin who decided, even about their own course", () => {
+    db.update(schema.courses)
+      .set({ instructorId: platformAdmin.id })
+      .where(eq(schema.courses.id, base.course.id))
+      .run();
+    const purchase = buyForSelf(platformAdmin.id);
+    const id = raise(purchase.id, platformAdmin.id);
+
+    const result = approveRefundRequest(db, id, platformAdmin.id, null, NOW);
+
+    expect(result).toEqual({ ok: true, notifications: [] });
+  });
+
+  it("sends nothing when the decision fails", () => {
+    const purchase = buyForSelf(base.user.id);
+    const id = raise(purchase.id, base.user.id);
+    approveRefundRequest(db, id, platformAdmin.id, null, NOW);
+
+    expect(approveRefundRequest(db, id, platformAdmin.id, null, NOW)).not.toHaveProperty(
+      "notifications"
+    );
+    expect(approveRefundRequest(db, 9999, platformAdmin.id, null, NOW)).toMatchObject({
+      ok: false,
+      status: 404,
+    });
   });
 });

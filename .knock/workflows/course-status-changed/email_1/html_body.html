@@ -1,0 +1,3 @@
+<p>Hi {{ recipient.name }},</p>
+<p>A Platform Admin {% case data.newStatus %}{% when "published" %}published {{ data.courseTitle }}{% when "archived" %}archived {{ data.courseTitle }}{% else %}moved {{ data.courseTitle }} to Draft{% endcase %} on Cadence.</p>
+<p>— The Cadence team</p>

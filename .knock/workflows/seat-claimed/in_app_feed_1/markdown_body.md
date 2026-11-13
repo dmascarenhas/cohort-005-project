@@ -1,0 +1,1 @@
+{% comment %}Fallback only: Cadence's Feed builds the sentence from data (app/lib/notification-sentences.ts). This shows in Knock's dashboard and logs.{% endcomment %}{{ data.actorName }} claimed a Seat on your Team Licence for {{ data.courseTitle }}. {{ data.unclaimedSeats }} of {{ data.totalSeats }} Seats are still unclaimed.

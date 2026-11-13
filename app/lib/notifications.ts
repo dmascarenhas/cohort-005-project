@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { UserRole } from "~/db/schema";
+import { CourseStatus, UserRole } from "~/db/schema";
 
 // ─── Notifications ───
 // What Cadence sends Knock, shared by the server (which triggers Notifications)
@@ -12,6 +12,67 @@ import { UserRole } from "~/db/schema";
 export const notificationDataSchemas = {
   "role-changed": z.object({
     newRole: z.nativeEnum(UserRole),
+    url: z.string(),
+  }),
+  // ── Seat claimed and New Enrollment (#15) ──
+  "seat-claimed": z.object({
+    actorName: z.string(),
+    courseTitle: z.string(),
+    unclaimedSeats: z.number(),
+    totalSeats: z.number(),
+    url: z.string(),
+  }),
+  "new-enrollment": z.object({
+    actorName: z.string(),
+    courseTitle: z.string(),
+    url: z.string(),
+  }),
+  // ── Refund decisions (#12) ──
+  "refund-request-approved": z.object({
+    courseTitle: z.string(),
+    amount: z.string(),
+    url: z.string(),
+  }),
+  "refund-request-declined": z.object({
+    courseTitle: z.string(),
+    note: z.string(),
+    url: z.string(),
+  }),
+  "team-licence-refund-request-approved": z.object({
+    courseTitle: z.string(),
+    amount: z.string(),
+    cancelledSeats: z.number(),
+    url: z.string(),
+  }),
+  "team-licence-refund-request-declined": z.object({
+    courseTitle: z.string(),
+    note: z.string(),
+    url: z.string(),
+  }),
+  "enrollment-refunded": z.discriminatedUnion("purchaseType", [
+    z.object({
+      purchaseType: z.literal("individual"),
+      courseTitle: z.string(),
+      studentName: z.string(),
+      url: z.string(),
+    }),
+    z.object({
+      purchaseType: z.literal("team-licence"),
+      courseTitle: z.string(),
+      cancelledSeats: z.number(),
+      url: z.string(),
+    }),
+  ]),
+  // ── end refund decisions ──
+  "course-rated": z.object({
+    actorName: z.string(),
+    courseTitle: z.string(),
+    rating: z.number().int(),
+    url: z.string(),
+  }),
+  "course-status-changed": z.object({
+    courseTitle: z.string(),
+    newStatus: z.nativeEnum(CourseStatus),
     url: z.string(),
   }),
   // Discussions (#14)
