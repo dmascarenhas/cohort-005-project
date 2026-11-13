@@ -6,6 +6,7 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import path from "path";
 import { fileURLToPath } from "url";
 import * as schema from "../app/db/schema";
+import { clearKnockDevelopmentUsers } from "../app/lib/knock.server";
 import {
   UserRole,
   CourseStatus,
@@ -60,7 +61,33 @@ function makeRandom(seed: number): () => number {
 
 // ─── Seed Data ───
 
+// A reseed renumbers users, and Knock user ids are Cadence user ids
+// (docs/adr/0014), so clear Knock's Development users first: otherwise seed
+// users would open Feeds full of Notifications from the previous database.
+async function clearKnock() {
+  try {
+    process.loadEnvFile(".env");
+  } catch {
+    // No .env: Knock isn't configured, and the cleanup will say so.
+  }
+
+  const result = await clearKnockDevelopmentUsers();
+
+  if (result.status === "cleared") {
+    console.log(`Cleared ${result.count} Knock Development user(s).`);
+  } else if (result.status === "skipped") {
+    console.log(`Skipped clearing Knock users: ${result.reason}.`);
+  } else {
+    console.warn(
+      "Couldn't clear Knock Development users; seeding anyway.",
+      result.error
+    );
+  }
+}
+
 async function seed() {
+  await clearKnock();
+
   console.log("Seeding database...");
 
   // Drop and recreate tables for a clean seed
