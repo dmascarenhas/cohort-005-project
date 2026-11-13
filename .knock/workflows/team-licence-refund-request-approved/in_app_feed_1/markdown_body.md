@@ -1,0 +1,1 @@
+{% comment %}Fallback only: Cadence's Feed builds the sentence from data (app/lib/notification-sentences.ts).{% endcomment %}Your Refund Request for the {{ data.courseTitle }} Team Licence was approved. {{ data.amount }} is on its way back to you, and its {{ data.cancelledSeats }} Unclaimed {% if data.cancelledSeats == 1 %}Seat{% else %}Seats{% endif %} can no longer be claimed.

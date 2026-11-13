@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import { UserRole } from "~/db/schema";
 import {
   notificationDataSchemas,
@@ -18,7 +19,9 @@ export type NotificationIcon =
   | "role"
   // ── Seat claimed and New Enrollment (#15) ──
   | "seat"
-  | "enrollment";
+  | "enrollment"
+  // ── Refund decisions (#12) ──
+  | "refund";
 
 export type DescribedNotification = {
   icon: NotificationIcon;
@@ -55,7 +58,62 @@ const describers: {
     icon: "enrollment",
     parts: [{ strong: actorName }, " enrolled on ", { strong: courseTitle }, "."],
   }),
+  // ── Refund decisions (#12) ──
+  "refund-request-approved": ({ courseTitle, amount }) => ({
+    icon: "refund",
+    parts: [
+      "Your Refund Request for ",
+      { strong: courseTitle },
+      ` was approved. ${amount} is on its way back to you.`,
+    ],
+  }),
+  "refund-request-declined": ({ courseTitle, note }) => ({
+    icon: "refund",
+    parts: [
+      "Your Refund Request for ",
+      { strong: courseTitle },
+      ` was declined: "${note}". You can raise a new one.`,
+    ],
+  }),
+  "team-licence-refund-request-approved": ({
+    courseTitle,
+    amount,
+    cancelledSeats,
+  }) => ({
+    icon: "refund",
+    parts: [
+      "Your Refund Request for the ",
+      { strong: courseTitle },
+      ` Team Licence was approved. ${amount} is on its way back to you, and its ${unclaimedSeats(cancelledSeats)} can no longer be claimed.`,
+    ],
+  }),
+  "team-licence-refund-request-declined": ({ courseTitle, note }) => ({
+    icon: "refund",
+    parts: [
+      "Your Refund Request for the ",
+      { strong: courseTitle },
+      ` Team Licence was declined: "${note}". Its Unclaimed Seats can be claimed again.`,
+    ],
+  }),
+  "enrollment-refunded": (data) => ({
+    icon: "refund",
+    parts: [
+      "A Refund Request for ",
+      { strong: data.courseTitle },
+      " was approved. ",
+      ...(data.purchaseType === "individual"
+        ? [{ strong: data.studentName }, " no longer has an Enrollment."]
+        : [
+            `${unclaimedSeats(data.cancelledSeats)} ${data.cancelledSeats === 1 ? "was" : "were"} cancelled.`,
+          ]),
+    ],
+  }),
+  // ── end refund decisions ──
 };
+
+function unclaimedSeats(count: number): string {
+  return `${count} Unclaimed ${count === 1 ? "Seat" : "Seats"}`;
+}
 
 function isWorkflowKey(key: string): key is WorkflowKey {
   return Object.hasOwn(notificationDataSchemas, key);
@@ -71,16 +129,26 @@ export function describeNotification(
   data: unknown
 ): DescribedNotification | null {
   if (!isWorkflowKey(workflowKey)) return null;
+  return describeAs(workflowKey, data);
+}
 
-  const parsed = notificationDataSchemas[workflowKey].safeParse(data);
+// TypeScript can't relate a key's schema to its describer across the union
+// of keys, so do it for one generic key K. The schema is the source of
+// NotificationData<K>, so the cast states what is already true.
+function describeAs<K extends WorkflowKey>(
+  workflowKey: K,
+  data: unknown
+): DescribedNotification | null {
+  const schema = notificationDataSchemas[workflowKey] as z.ZodType<
+    NotificationData<K>
+  >;
+  const parsed = schema.safeParse(data);
   if (!parsed.success) return null;
 
   // TypeScript can't pair describers[key] with schemas[key] through a union
   // key, but parsed.data was just checked against this key's own schema.
-  const describe = describers[workflowKey] as (
-    data: NotificationData<WorkflowKey>
-  ) => Omit<DescribedNotification, "url">;
-
+  const describe: (data: NotificationData<K>) => Omit<DescribedNotification, "url"> =
+    describers[workflowKey];
   return { ...describe(parsed.data), url: parsed.data.url };
 }
 

@@ -27,6 +27,43 @@ export const notificationDataSchemas = {
     courseTitle: z.string(),
     url: z.string(),
   }),
+  // ── Refund decisions (#12) ──
+  "refund-request-approved": z.object({
+    courseTitle: z.string(),
+    amount: z.string(),
+    url: z.string(),
+  }),
+  "refund-request-declined": z.object({
+    courseTitle: z.string(),
+    note: z.string(),
+    url: z.string(),
+  }),
+  "team-licence-refund-request-approved": z.object({
+    courseTitle: z.string(),
+    amount: z.string(),
+    cancelledSeats: z.number(),
+    url: z.string(),
+  }),
+  "team-licence-refund-request-declined": z.object({
+    courseTitle: z.string(),
+    note: z.string(),
+    url: z.string(),
+  }),
+  "enrollment-refunded": z.discriminatedUnion("purchaseType", [
+    z.object({
+      purchaseType: z.literal("individual"),
+      courseTitle: z.string(),
+      studentName: z.string(),
+      url: z.string(),
+    }),
+    z.object({
+      purchaseType: z.literal("team-licence"),
+      courseTitle: z.string(),
+      cancelledSeats: z.number(),
+      url: z.string(),
+    }),
+  ]),
+  // ── end refund decisions ──
 } satisfies Record<string, z.ZodType<{ url: string }>>;
 
 export type WorkflowKey = keyof typeof notificationDataSchemas;

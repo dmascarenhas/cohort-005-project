@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useRevalidator } from "react-router";
-import { Bell, UserCog } from "lucide-react";
-import { Ticket, UserPlus } from "lucide-react";
+import { Bell, Receipt, Ticket, UserCog, UserPlus } from "lucide-react";
 import { z } from "zod";
 import {
   KnockFeedProvider,
@@ -210,6 +209,7 @@ const ICONS: Record<NotificationIcon, React.ReactNode> = {
   // ── Seat claimed and New Enrollment (#15) ──
   seat: <Ticket className="size-4" />,
   enrollment: <UserPlus className="size-4" />,
+  refund: <Receipt className="size-4" />,
 };
 
 function FeedRow({
