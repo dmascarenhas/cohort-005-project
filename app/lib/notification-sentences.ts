@@ -23,7 +23,10 @@ export type NotificationIcon =
   | "refund"
   // ── Course rated and Course status changed (#16) ──
   | "rating"
-  | "course-status";
+  | "course-status"
+  // ── Discussions (#14) ──
+  | "question"
+  | "reply";
 
 export type DescribedNotification = {
   icon: NotificationIcon;
@@ -133,6 +136,42 @@ const describers: {
       `A Platform Admin ${STATUS_CHANGE_VERB[newStatus]} `,
       { strong: courseTitle },
       newStatus === CourseStatus.Draft ? " to Draft." : ".",
+    ],
+  }),
+  // Discussions (#14)
+  "new-discussion-question": ({ actorName, lessonTitle, courseTitle }) => ({
+    icon: "question",
+    parts: [
+      { strong: actorName },
+      " asked a question on ",
+      { strong: lessonTitle },
+      " in ",
+      { strong: courseTitle },
+      ".",
+    ],
+  }),
+  "instructor-answered-discussion-question": ({
+    actorName,
+    lessonTitle,
+    courseTitle,
+  }) => ({
+    icon: "reply",
+    parts: [
+      { strong: actorName },
+      " answered your question on ",
+      { strong: lessonTitle },
+      " in ",
+      { strong: courseTitle },
+      ".",
+    ],
+  }),
+  "new-discussion-reply": ({ actorName, lessonTitle }) => ({
+    icon: "reply",
+    parts: [
+      { strong: actorName },
+      " replied to your question on ",
+      { strong: lessonTitle },
+      ".",
     ],
   }),
 };

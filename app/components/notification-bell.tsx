@@ -3,6 +3,8 @@ import { useNavigate, useRevalidator } from "react-router";
 import {
   Bell,
   BookOpen,
+  MessageCircleQuestion,
+  MessageSquareReply,
   Receipt,
   Star,
   Ticket,
@@ -220,6 +222,9 @@ const ICONS: Record<NotificationIcon, React.ReactNode> = {
   refund: <Receipt className="size-4" />,
   rating: <Star className="size-4" />,
   "course-status": <BookOpen className="size-4" />,
+  // Discussions (#14)
+  question: <MessageCircleQuestion className="size-4" />,
+  reply: <MessageSquareReply className="size-4" />,
 };
 
 function FeedRow({
