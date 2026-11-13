@@ -14,7 +14,7 @@ import {
 /** Text runs of a sentence; `{ strong }` runs are shown in bold. */
 export type SentencePart = string | { strong: string };
 
-export type NotificationIcon = "role";
+export type NotificationIcon = "role" | "question" | "reply";
 
 export type DescribedNotification = {
   icon: NotificationIcon;
@@ -37,6 +37,42 @@ const describers: {
     icon: "role",
     parts: ["A Platform Admin made you ", { strong: ROLE_WITH_ARTICLE[newRole] }, "."],
   }),
+  // Discussions (#14)
+  "new-discussion-question": ({ actorName, lessonTitle, courseTitle }) => ({
+    icon: "question",
+    parts: [
+      { strong: actorName },
+      " asked a question on ",
+      { strong: lessonTitle },
+      " in ",
+      { strong: courseTitle },
+      ".",
+    ],
+  }),
+  "instructor-answered-discussion-question": ({
+    actorName,
+    lessonTitle,
+    courseTitle,
+  }) => ({
+    icon: "reply",
+    parts: [
+      { strong: actorName },
+      " answered your question on ",
+      { strong: lessonTitle },
+      " in ",
+      { strong: courseTitle },
+      ".",
+    ],
+  }),
+  "new-discussion-reply": ({ actorName, lessonTitle }) => ({
+    icon: "reply",
+    parts: [
+      { strong: actorName },
+      " replied to your question on ",
+      { strong: lessonTitle },
+      ".",
+    ],
+  }),
 };
 
 function isWorkflowKey(key: string): key is WorkflowKey {
@@ -53,11 +89,34 @@ export function describeNotification(
   data: unknown
 ): DescribedNotification | null {
   if (!isWorkflowKey(workflowKey)) return null;
+  return describeKnown(workflowKey, data);
+}
 
-  const parsed = notificationDataSchemas[workflowKey].safeParse(data);
+// The schemas seen only as parsers, as a mapped type over the workflow keys,
+// so indexing with a generic key keeps the key and its data type together.
+const parsers: {
+  [K in WorkflowKey]: {
+    safeParse(
+      data: unknown
+    ): { success: true; data: NotificationData<K> } | { success: false };
+  };
+} = notificationDataSchemas;
+
+// Generic over the key, so the parsed data and its describer stay tied to the
+// same workflow instead of widening to a union of all of them.
+function describeKnown<K extends WorkflowKey>(
+  workflowKey: K,
+  data: unknown
+): DescribedNotification | null {
+  const parsed = parsers[workflowKey].safeParse(data);
   if (!parsed.success) return null;
 
-  return { ...describers[workflowKey](parsed.data), url: parsed.data.url };
+  const describe: (data: NotificationData<K>) => Omit<
+    DescribedNotification,
+    "url"
+  > = describers[workflowKey];
+
+  return { ...describe(parsed.data), url: parsed.data.url };
 }
 
 /** The sentence as plain text, for labels and Knock's fallback template. */

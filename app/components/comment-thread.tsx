@@ -371,14 +371,20 @@ export function CommentThread({
         ) : (
           <div className="divide-y">
             {comments.map((comment) => (
-              <CommentItem
+              // Discussion Notifications link here: #discussion-<questionId>.
+              <div
                 key={comment.id}
-                comment={comment}
-                currentUserId={currentUserId}
-                canModerate={canModerate}
-                canPost={canPost}
-                isReply={false}
-              />
+                id={`discussion-${comment.id}`}
+                className="scroll-mt-4"
+              >
+                <CommentItem
+                  comment={comment}
+                  currentUserId={currentUserId}
+                  canModerate={canModerate}
+                  canPost={canPost}
+                  isReply={false}
+                />
+              </div>
             ))}
           </div>
         )}

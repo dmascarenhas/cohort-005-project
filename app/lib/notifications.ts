@@ -14,6 +14,24 @@ export const notificationDataSchemas = {
     newRole: z.nativeEnum(UserRole),
     url: z.string(),
   }),
+  // Discussions (#14)
+  "new-discussion-question": z.object({
+    actorName: z.string(),
+    lessonTitle: z.string(),
+    courseTitle: z.string(),
+    url: z.string(),
+  }),
+  "instructor-answered-discussion-question": z.object({
+    actorName: z.string(),
+    lessonTitle: z.string(),
+    courseTitle: z.string(),
+    url: z.string(),
+  }),
+  "new-discussion-reply": z.object({
+    actorName: z.string(),
+    lessonTitle: z.string(),
+    url: z.string(),
+  }),
 } satisfies Record<string, z.ZodType<{ url: string }>>;
 
 export type WorkflowKey = keyof typeof notificationDataSchemas;
