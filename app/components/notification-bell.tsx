@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRevalidator } from "react-router";
 import { Bell } from "lucide-react";
 import { z } from "zod";
@@ -47,24 +47,52 @@ async function refreshToken(
   return body.token;
 }
 
-export function NotificationBell({
-  userId,
-  connection,
-}: {
+type NotificationBellProps = {
   userId: number;
   connection: FeedConnection;
-}) {
-  const revalidator = useRevalidator();
+};
 
-  // Keyed on the user: a DevUI switch re-runs the layout loader, and the new
-  // user gets a new token and a freshly mounted Knock client.
+// Keyed on the user: a DevUI switch re-runs the layout loader, and the new
+// user gets a new token and a freshly mounted Knock client.
+export function NotificationBell(props: NotificationBellProps) {
+  return <UserFeed key={props.userId} {...props} />;
+}
+
+function UserFeed({ userId, connection }: NotificationBellProps) {
+  // The layout loader re-runs on every navigation and signs a new token each
+  // time. Handing those to Knock would re-authenticate and reconnect on every
+  // page change, so keep the first token for this user; Knock asks for a fresh
+  // one through onUserTokenExpiring when it is about to run out.
+  const [userToken] = useState(connection.userToken);
+
+  const revalidator = useRevalidator();
+  const revalidateRef = useRef(revalidator.revalidate);
+  revalidateRef.current = revalidator.revalidate;
+
+  // Knock compares its props by reference, so a new user object or callback on
+  // every render would rebuild the client and its socket each time.
+  const user = useMemo(() => ({ id: String(userId) }), [userId]);
+  const onUserTokenExpiring = useCallback(
+    () => refreshToken(userId, () => revalidateRef.current()),
+    [userId]
+  );
+
+  // The Knock client is built during render, so on the server it would
+  // identify the user and start timers. Mount it only once the page has
+  // hydrated; until then show the same bell without a count. (Mounting it
+  // disabled and enabling it later skips the real-time connection, because the
+  // feed only joins the socket if it was created signed in.)
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
+
+  if (!hydrated) return <BellButton unread={0} open={false} />;
+
   return (
     <KnockProvider
-      key={userId}
       apiKey={connection.publicKey}
-      user={{ id: String(userId) }}
-      userToken={connection.userToken}
-      onUserTokenExpiring={() => refreshToken(userId, revalidator.revalidate)}
+      user={user}
+      userToken={userToken}
+      onUserTokenExpiring={onUserTokenExpiring}
     >
       <KnockFeedProvider feedId={connection.feedChannelId}>
         <BellDropdown />
@@ -85,23 +113,11 @@ function BellDropdown() {
 
   return (
     <div className="relative">
-      <button
-        type="button"
+      <BellButton
+        unread={unread}
+        open={open}
         onClick={() => setOpen((isOpen) => !isOpen)}
-        title="Notifications"
-        aria-label={
-          unread > 0 ? `Notifications, ${unread} unread` : "Notifications"
-        }
-        aria-expanded={open}
-        className="relative rounded-md p-1.5 text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-      >
-        <Bell className="size-5" />
-        {unread > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
-            {unread > 9 ? "9+" : unread}
-          </span>
-        )}
-      </button>
+      />
       {open && (
         <>
           <div
@@ -120,6 +136,36 @@ function BellDropdown() {
         </>
       )}
     </div>
+  );
+}
+
+function BellButton({
+  unread,
+  open,
+  onClick,
+}: {
+  unread: number;
+  open: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Notifications"
+      aria-label={
+        unread > 0 ? `Notifications, ${unread} unread` : "Notifications"
+      }
+      aria-expanded={open}
+      className="relative rounded-md p-1.5 text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+    >
+      <Bell className="size-5" />
+      {unread > 0 && (
+        <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
+          {unread > 9 ? "9+" : unread}
+        </span>
+      )}
+    </button>
   );
 }
 
