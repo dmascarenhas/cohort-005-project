@@ -21,7 +21,7 @@ import {
   type RefundRequestForReview,
 } from "~/lib/refunds.server";
 import { RULE_BREAK_LABELS } from "~/lib/refund-rules";
-import { sendEmail } from "~/lib/mailer.server";
+import { sendNotifications } from "~/lib/knock.server";
 
 const refundFilterSchema = z
   .nativeEnum(RefundStatus)
@@ -127,7 +127,7 @@ export async function action({ request }: Route.ActionArgs) {
     return data({ error: result.error }, { status: result.status });
   }
 
-  await sendEmail(result.email);
+  await sendNotifications(result.notifications);
 
   return {
     success: true,
