@@ -133,3 +133,68 @@ export async function sendNotifications(
     }
   }
 }
+
+// ─── Clearing Development users ───
+
+/** The two Knock calls the seed needs to empty an environment's users. */
+export type KnockUserAdmin = {
+  listUserIds(): AsyncIterable<string>;
+  bulkDelete(userIds: string[]): Promise<unknown>;
+};
+
+export type ClearKnockUsersResult =
+  | { status: "skipped"; reason: string }
+  | { status: "cleared"; count: number }
+  | { status: "failed"; error: unknown };
+
+/** Knock deletes at most this many users in one bulk call. */
+const BULK_DELETE_LIMIT = 1000;
+
+function knockUserAdmin(apiKey: string): KnockUserAdmin {
+  const client = new Knock({ apiKey });
+  return {
+    async *listUserIds() {
+      for await (const user of client.users.list()) yield user.id;
+    },
+    bulkDelete: (userIds) => client.users.bulk.delete({ user_ids: userIds }),
+  };
+}
+
+/**
+ * Deletes every Knock user in the Development environment, so that after a
+ * reseed renumbers users (docs/adr/0014) no seed user opens a Feed full of
+ * someone else's Notifications. Runs only with a test secret key: a live key
+ * belongs to Production and is never touched. Never throws, so a Knock
+ * problem can't stop the seed.
+ */
+export async function clearKnockDevelopmentUsers({
+  apiKey = process.env.KNOCK_SECRET_API_KEY,
+  admin,
+}: { apiKey?: string; admin?: KnockUserAdmin } = {}): Promise<ClearKnockUsersResult> {
+  if (!apiKey) {
+    return { status: "skipped", reason: "KNOCK_SECRET_API_KEY isn't set" };
+  }
+  if (!apiKey.startsWith("sk_test_")) {
+    return {
+      status: "skipped",
+      reason: "KNOCK_SECRET_API_KEY isn't a test key, so it isn't Development",
+    };
+  }
+
+  const knock = admin ?? knockUserAdmin(apiKey);
+
+  try {
+    // List everyone before deleting anyone: deleting while paging through
+    // the list could move the cursor past users not yet seen.
+    const userIds: string[] = [];
+    for await (const userId of knock.listUserIds()) userIds.push(userId);
+
+    for (let start = 0; start < userIds.length; start += BULK_DELETE_LIMIT) {
+      await knock.bulkDelete(userIds.slice(start, start + BULK_DELETE_LIMIT));
+    }
+
+    return { status: "cleared", count: userIds.length };
+  } catch (error) {
+    return { status: "failed", error };
+  }
+}
