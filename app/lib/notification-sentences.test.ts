@@ -167,3 +167,39 @@ describe("refund decision sentences", () => {
   });
 });
 // ── end refund decisions ──
+describe("describeNotification: course owners", () => {
+  it("says who rated the course and the score, with names in bold", () => {
+    expect(
+      describeNotification("course-rated", {
+        actorName: "Emma Wilson",
+        courseTitle: "Introduction to TypeScript",
+        rating: 4,
+        url: "/instructor/1",
+      })
+    ).toEqual({
+      icon: "rating",
+      parts: [
+        { strong: "Emma Wilson" },
+        " rated ",
+        { strong: "Introduction to TypeScript" },
+        " 4/5.",
+      ],
+      url: "/instructor/1",
+    });
+  });
+
+  it.each([
+    ["published", "A Platform Admin published Intro to TS."],
+    ["archived", "A Platform Admin archived Intro to TS."],
+    ["draft", "A Platform Admin moved Intro to TS to Draft."],
+  ])("words a change to %s", (newStatus, sentence) => {
+    const described = describeNotification("course-status-changed", {
+      courseTitle: "Intro to TS",
+      newStatus,
+      url: "/instructor/1",
+    });
+
+    expect(described?.icon).toBe("course-status");
+    expect(described && sentenceText(described.parts)).toBe(sentence);
+  });
+});

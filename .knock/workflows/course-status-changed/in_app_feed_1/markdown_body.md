@@ -1,0 +1,1 @@
+{% comment %}Fallback only: Cadence's Feed builds the sentence from data (app/lib/notification-sentences.ts). This shows in Knock's dashboard and logs.{% endcomment %}A Platform Admin {% case data.newStatus %}{% when "published" %}published {{ data.courseTitle }}{% when "archived" %}archived {{ data.courseTitle }}{% else %}moved {{ data.courseTitle }} to Draft{% endcase %}.

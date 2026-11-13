@@ -1,5 +1,4 @@
-import type { z } from "zod";
-import { UserRole } from "~/db/schema";
+import { CourseStatus, UserRole } from "~/db/schema";
 import {
   notificationDataSchemas,
   type NotificationData,
@@ -21,7 +20,10 @@ export type NotificationIcon =
   | "seat"
   | "enrollment"
   // ── Refund decisions (#12) ──
-  | "refund";
+  | "refund"
+  // ── Course rated and Course status changed (#16) ──
+  | "rating"
+  | "course-status";
 
 export type DescribedNotification = {
   icon: NotificationIcon;
@@ -33,6 +35,13 @@ const ROLE_WITH_ARTICLE: Record<UserRole, string> = {
   [UserRole.Student]: "a Student",
   [UserRole.Instructor]: "an Instructor",
   [UserRole.Admin]: "a Platform Admin",
+};
+
+/** "A Platform Admin {published / archived / moved} {Course}[ to Draft]." */
+const STATUS_CHANGE_VERB: Record<CourseStatus, string> = {
+  [CourseStatus.Published]: "published",
+  [CourseStatus.Archived]: "archived",
+  [CourseStatus.Draft]: "moved",
 };
 
 const describers: {
@@ -109,6 +118,23 @@ const describers: {
     ],
   }),
   // ── end refund decisions ──
+  "course-rated": ({ actorName, courseTitle, rating }) => ({
+    icon: "rating",
+    parts: [
+      { strong: actorName },
+      " rated ",
+      { strong: courseTitle },
+      ` ${rating}/5.`,
+    ],
+  }),
+  "course-status-changed": ({ courseTitle, newStatus }) => ({
+    icon: "course-status",
+    parts: [
+      `A Platform Admin ${STATUS_CHANGE_VERB[newStatus]} `,
+      { strong: courseTitle },
+      newStatus === CourseStatus.Draft ? " to Draft." : ".",
+    ],
+  }),
 };
 
 function unclaimedSeats(count: number): string {
@@ -132,23 +158,28 @@ export function describeNotification(
   return describeAs(workflowKey, data);
 }
 
-// TypeScript can't relate a key's schema to its describer across the union
-// of keys, so do it for one generic key K. The schema is the source of
-// NotificationData<K>, so the cast states what is already true.
+// The schemas seen as one parser per key. Assigning the real schemas here is
+// checked key by key, and indexing a mapped type with a generic key lets
+// TypeScript tie that key's parsed data to that key's describer.
+const parsers: {
+  [K in WorkflowKey]: {
+    safeParse(
+      data: unknown
+    ): { success: true; data: NotificationData<K> } | { success: false };
+  };
+} = notificationDataSchemas;
+
 function describeAs<K extends WorkflowKey>(
   workflowKey: K,
   data: unknown
 ): DescribedNotification | null {
-  const schema = notificationDataSchemas[workflowKey] as z.ZodType<
-    NotificationData<K>
-  >;
-  const parsed = schema.safeParse(data);
+  const parsed = parsers[workflowKey].safeParse(data);
   if (!parsed.success) return null;
 
-  // TypeScript can't pair describers[key] with schemas[key] through a union
-  // key, but parsed.data was just checked against this key's own schema.
-  const describe: (data: NotificationData<K>) => Omit<DescribedNotification, "url"> =
-    describers[workflowKey];
+  const describe: (data: NotificationData<K>) => Omit<
+    DescribedNotification,
+    "url"
+  > = describers[workflowKey];
   return { ...describe(parsed.data), url: parsed.data.url };
 }
 
