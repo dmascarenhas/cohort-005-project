@@ -1,0 +1,1 @@
+{% comment %}Fallback only: Cadence's Feed builds the sentence from data (app/lib/notification-sentences.ts).{% endcomment %}Your Refund Request for {{ data.courseTitle }} was declined: "{{ data.note }}". You can raise a new one.

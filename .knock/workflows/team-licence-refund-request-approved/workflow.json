@@ -1,0 +1,37 @@
+{
+  "name": "Team Licence Refund Request approved",
+  "description": "Sent by Cadence when a Platform Admin decides a Refund Request (#12).",
+  "steps": [
+    {
+      "type": "channel",
+      "template": {
+        "action_url": "{{ data.url }}",
+        "markdown_body@": "in_app_feed_1/markdown_body.md"
+      },
+      "ref": "in_app_feed_1",
+      "channel_type": "in_app_feed",
+      "channel_key": "in-app"
+    },
+    {
+      "type": "channel",
+      "template": {
+        "subject": "Your refund for the {{ data.courseTitle }} Team Licence was approved",
+        "settings": {
+          "layout_key": "default",
+          "attachment_key": "attachments"
+        },
+        "html_body@": "email_1/html_body.html"
+      },
+      "ref": "email_1",
+      "channel_type": "email",
+      "channel_key": "knock-email"
+    }
+  ],
+  "trigger_frequency": "every_trigger",
+  "__readonly": {
+    "key": "team-licence-refund-request-approved",
+    "active": true,
+    "valid": true
+  },
+  "$schema": "https://schemas.knock.app/cli/workflow.json"
+}

@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useRevalidator } from "react-router";
-import { Bell, BookOpen, Star, UserCog } from "lucide-react";
+import {
+  Bell,
+  BookOpen,
+  Receipt,
+  Star,
+  Ticket,
+  UserCog,
+  UserPlus,
+} from "lucide-react";
 import { z } from "zod";
 import {
   KnockFeedProvider,
@@ -206,6 +214,10 @@ function BellButton({
 
 const ICONS: Record<NotificationIcon, React.ReactNode> = {
   role: <UserCog className="size-4" />,
+  // ── Seat claimed and New Enrollment (#15) ──
+  seat: <Ticket className="size-4" />,
+  enrollment: <UserPlus className="size-4" />,
+  refund: <Receipt className="size-4" />,
   rating: <Star className="size-4" />,
   "course-status": <BookOpen className="size-4" />,
 };

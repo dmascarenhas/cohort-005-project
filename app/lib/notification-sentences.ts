@@ -14,7 +14,16 @@ import {
 /** Text runs of a sentence; `{ strong }` runs are shown in bold. */
 export type SentencePart = string | { strong: string };
 
-export type NotificationIcon = "role" | "rating" | "course-status";
+export type NotificationIcon =
+  | "role"
+  // ── Seat claimed and New Enrollment (#15) ──
+  | "seat"
+  | "enrollment"
+  // ── Refund decisions (#12) ──
+  | "refund"
+  // ── Course rated and Course status changed (#16) ──
+  | "rating"
+  | "course-status";
 
 export type DescribedNotification = {
   icon: NotificationIcon;
@@ -44,6 +53,71 @@ const describers: {
     icon: "role",
     parts: ["A Platform Admin made you ", { strong: ROLE_WITH_ARTICLE[newRole] }, "."],
   }),
+  // ── Seat claimed and New Enrollment (#15) ──
+  "seat-claimed": ({ actorName, courseTitle, unclaimedSeats, totalSeats }) => ({
+    icon: "seat",
+    parts: [
+      { strong: actorName },
+      " claimed a Seat on your Team Licence for ",
+      { strong: courseTitle },
+      `. ${unclaimedSeats} of ${totalSeats} Seats are still unclaimed.`,
+    ],
+  }),
+  "new-enrollment": ({ actorName, courseTitle }) => ({
+    icon: "enrollment",
+    parts: [{ strong: actorName }, " enrolled on ", { strong: courseTitle }, "."],
+  }),
+  // ── Refund decisions (#12) ──
+  "refund-request-approved": ({ courseTitle, amount }) => ({
+    icon: "refund",
+    parts: [
+      "Your Refund Request for ",
+      { strong: courseTitle },
+      ` was approved. ${amount} is on its way back to you.`,
+    ],
+  }),
+  "refund-request-declined": ({ courseTitle, note }) => ({
+    icon: "refund",
+    parts: [
+      "Your Refund Request for ",
+      { strong: courseTitle },
+      ` was declined: "${note}". You can raise a new one.`,
+    ],
+  }),
+  "team-licence-refund-request-approved": ({
+    courseTitle,
+    amount,
+    cancelledSeats,
+  }) => ({
+    icon: "refund",
+    parts: [
+      "Your Refund Request for the ",
+      { strong: courseTitle },
+      ` Team Licence was approved. ${amount} is on its way back to you, and its ${unclaimedSeats(cancelledSeats)} can no longer be claimed.`,
+    ],
+  }),
+  "team-licence-refund-request-declined": ({ courseTitle, note }) => ({
+    icon: "refund",
+    parts: [
+      "Your Refund Request for the ",
+      { strong: courseTitle },
+      ` Team Licence was declined: "${note}". Its Unclaimed Seats can be claimed again.`,
+    ],
+  }),
+  "enrollment-refunded": (data) => ({
+    icon: "refund",
+    parts: [
+      "A Refund Request for ",
+      { strong: data.courseTitle },
+      " was approved. ",
+      ...(data.purchaseType === "individual"
+        ? [{ strong: data.studentName }, " no longer has an Enrollment."]
+        : [
+            `${unclaimedSeats(data.cancelledSeats)} ${data.cancelledSeats === 1 ? "was" : "were"} cancelled.`,
+          ]),
+    ],
+  }),
+  // ── end refund decisions ──
   "course-rated": ({ actorName, courseTitle, rating }) => ({
     icon: "rating",
     parts: [
@@ -62,6 +136,10 @@ const describers: {
     ],
   }),
 };
+
+function unclaimedSeats(count: number): string {
+  return `${count} Unclaimed ${count === 1 ? "Seat" : "Seats"}`;
+}
 
 function isWorkflowKey(key: string): key is WorkflowKey {
   return Object.hasOwn(notificationDataSchemas, key);

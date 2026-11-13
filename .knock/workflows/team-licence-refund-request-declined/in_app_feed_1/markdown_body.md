@@ -1,0 +1,1 @@
+{% comment %}Fallback only: Cadence's Feed builds the sentence from data (app/lib/notification-sentences.ts).{% endcomment %}Your Refund Request for the {{ data.courseTitle }} Team Licence was declined: "{{ data.note }}". Its Unclaimed Seats can be claimed again.
