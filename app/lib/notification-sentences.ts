@@ -14,7 +14,11 @@ import {
 /** Text runs of a sentence; `{ strong }` runs are shown in bold. */
 export type SentencePart = string | { strong: string };
 
-export type NotificationIcon = "role";
+export type NotificationIcon =
+  | "role"
+  // ── Seat claimed and New Enrollment (#15) ──
+  | "seat"
+  | "enrollment";
 
 export type DescribedNotification = {
   icon: NotificationIcon;
@@ -37,6 +41,20 @@ const describers: {
     icon: "role",
     parts: ["A Platform Admin made you ", { strong: ROLE_WITH_ARTICLE[newRole] }, "."],
   }),
+  // ── Seat claimed and New Enrollment (#15) ──
+  "seat-claimed": ({ actorName, courseTitle, unclaimedSeats, totalSeats }) => ({
+    icon: "seat",
+    parts: [
+      { strong: actorName },
+      " claimed a Seat on your Team Licence for ",
+      { strong: courseTitle },
+      `. ${unclaimedSeats} of ${totalSeats} Seats are still unclaimed.`,
+    ],
+  }),
+  "new-enrollment": ({ actorName, courseTitle }) => ({
+    icon: "enrollment",
+    parts: [{ strong: actorName }, " enrolled on ", { strong: courseTitle }, "."],
+  }),
 };
 
 function isWorkflowKey(key: string): key is WorkflowKey {
@@ -57,7 +75,13 @@ export function describeNotification(
   const parsed = notificationDataSchemas[workflowKey].safeParse(data);
   if (!parsed.success) return null;
 
-  return { ...describers[workflowKey](parsed.data), url: parsed.data.url };
+  // TypeScript can't pair describers[key] with schemas[key] through a union
+  // key, but parsed.data was just checked against this key's own schema.
+  const describe = describers[workflowKey] as (
+    data: NotificationData<WorkflowKey>
+  ) => Omit<DescribedNotification, "url">;
+
+  return { ...describe(parsed.data), url: parsed.data.url };
 }
 
 /** The sentence as plain text, for labels and Knock's fallback template. */

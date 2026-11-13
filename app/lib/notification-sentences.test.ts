@@ -38,3 +38,39 @@ describe("describeNotification", () => {
     expect(describeNotification("role-changed", null)).toBeNull();
   });
 });
+
+describe("describeNotification: Seat claimed and New Enrollment", () => {
+  it("tells the Team Admin who claimed a Seat and how many are left", () => {
+    const described = describeNotification("seat-claimed", {
+      actorName: "Sam Student",
+      courseTitle: "Test Course",
+      unclaimedSeats: 2,
+      totalSeats: 3,
+      url: "/team",
+    });
+
+    expect(described).toEqual({
+      icon: "seat",
+      parts: [
+        { strong: "Sam Student" },
+        " claimed a Seat on your Team Licence for ",
+        { strong: "Test Course" },
+        ". 2 of 3 Seats are still unclaimed.",
+      ],
+      url: "/team",
+    });
+  });
+
+  it("tells the course's owner who enrolled", () => {
+    const described = describeNotification("new-enrollment", {
+      actorName: "Sam Student",
+      courseTitle: "Test Course",
+      url: "/instructor/1/students",
+    });
+
+    expect(described && sentenceText(described.parts)).toBe(
+      "Sam Student enrolled on Test Course."
+    );
+    expect(described?.url).toBe("/instructor/1/students");
+  });
+});
