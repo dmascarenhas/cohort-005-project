@@ -1,0 +1,1 @@
+{% comment %}Fallback only: Cadence's Feed builds the sentence from data (app/lib/notification-sentences.ts).{% endcomment %}{{ data.actorName }} asked for a Refund on {{ data.courseTitle }} ({% if data.purchaseType == "team-licence" %}Team Licence{% else %}Individual Purchase{% endif %}, {{ data.amount }}): "{{ data.reason }}".

@@ -27,6 +27,15 @@ export const notificationDataSchemas = {
     courseTitle: z.string(),
     url: z.string(),
   }),
+  // ── New Refund Request (#13) ──
+  "new-refund-request": z.object({
+    actorName: z.string(),
+    courseTitle: z.string(),
+    purchaseType: z.enum(["individual", "team-licence"]),
+    amount: z.string(),
+    reason: z.string(),
+    url: z.string(),
+  }),
   // ── Refund decisions (#12) ──
   "refund-request-approved": z.object({
     courseTitle: z.string(),
