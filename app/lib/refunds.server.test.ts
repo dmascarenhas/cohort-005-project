@@ -237,6 +237,85 @@ describe("raising a Refund Request", () => {
   });
 });
 
+describe("telling the Platform Admins about a new Refund Request", () => {
+  function raiseWithReason(purchaseId: number, buyerId: number) {
+    const result = raiseRefundRequest(
+      db,
+      purchaseId,
+      buyerId,
+      "It was not what I expected.",
+      NOW
+    );
+    if (!result.ok) throw new Error(result.error);
+    return result.notifications;
+  }
+
+  function addPlatformAdmin(name: string) {
+    return db
+      .insert(schema.users)
+      .values({
+        name,
+        email: `${name.toLowerCase().replace(" ", ".")}@example.com`,
+        role: UserRole.Admin,
+      })
+      .returning()
+      .get();
+  }
+
+  it("tells every Platform Admin who asked, for what, how much and why", () => {
+    const secondAdmin = addPlatformAdmin("Quinn Admin");
+    const purchase = buyForSelf(base.user.id);
+
+    const notifications = raiseWithReason(purchase.id, base.user.id);
+
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0]).toMatchObject({
+      workflow: "new-refund-request",
+      actor: { id: String(base.user.id) },
+      data: {
+        actorName: base.user.name,
+        courseTitle: base.course.title,
+        purchaseType: "individual",
+        amount: "$79.00",
+        reason: "It was not what I expected.",
+        url: "/admin/refunds",
+      },
+    });
+    expect(
+      notifications[0].recipients.map((person) => person.id).sort()
+    ).toEqual([String(platformAdmin.id), String(secondAdmin.id)].sort());
+  });
+
+  it("says when the Refund Request is for a Team Licence", () => {
+    const teamAdmin = addLearner("Priya");
+    const { purchase } = buySeats(teamAdmin.id, 3);
+
+    const [notification] = raiseWithReason(purchase.id, teamAdmin.id);
+
+    expect(notification.data).toMatchObject({
+      purchaseType: "team-licence",
+      amount: "$237.00",
+    });
+  });
+
+  it("never tells a Platform Admin about their own Refund Request", () => {
+    const purchase = buyForSelf(platformAdmin.id);
+    const otherAdmin = addPlatformAdmin("Quinn Admin");
+
+    const [notification] = raiseWithReason(purchase.id, platformAdmin.id);
+
+    expect(notification.recipients.map((person) => person.id)).toEqual([
+      String(otherAdmin.id),
+    ]);
+  });
+
+  it("sends nothing when the buyer is the only Platform Admin", () => {
+    const purchase = buyForSelf(platformAdmin.id);
+
+    expect(raiseWithReason(purchase.id, platformAdmin.id)).toEqual([]);
+  });
+});
+
 describe("the refund offer on the course page", () => {
   it("offers the newest Individual Purchase, not a newer Team Licence", () => {
     const individual = buyForSelf(base.user.id, 3);

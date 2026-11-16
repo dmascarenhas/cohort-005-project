@@ -167,6 +167,45 @@ describe("refund decision sentences", () => {
   });
 });
 // ── end refund decisions ──
+describe("describeNotification: New Refund Request", () => {
+  it("tells a Platform Admin who asked, for what, how much and why", () => {
+    const described = describeNotification("new-refund-request", {
+      actorName: "Emma Wilson",
+      courseTitle: "Intro to TypeScript",
+      purchaseType: "individual",
+      amount: "$49.00",
+      reason: "Not what I expected",
+      url: "/admin/refunds",
+    });
+
+    expect(described).toEqual({
+      icon: "refund",
+      parts: [
+        { strong: "Emma Wilson" },
+        " asked for a Refund on ",
+        { strong: "Intro to TypeScript" },
+        ' (Individual Purchase, $49.00): "Not what I expected".',
+      ],
+      url: "/admin/refunds",
+    });
+  });
+
+  it("names a Team Licence", () => {
+    const described = describeNotification("new-refund-request", {
+      actorName: "Priya Patel",
+      courseTitle: "Intro",
+      purchaseType: "team-licence",
+      amount: "$237.00",
+      reason: "Team changed plans",
+      url: "/admin/refunds",
+    });
+
+    expect(described && sentenceText(described.parts)).toBe(
+      'Priya Patel asked for a Refund on Intro (Team Licence, $237.00): "Team changed plans".'
+    );
+  });
+});
+
 describe("describeNotification: course owners", () => {
   it("says who rated the course and the score, with names in bold", () => {
     expect(

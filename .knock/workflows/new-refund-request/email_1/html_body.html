@@ -1,0 +1,5 @@
+<p>Hi {{ recipient.name }},</p>
+<p>{{ data.actorName }} asked for a Refund on {{ data.courseTitle }} ({% if data.purchaseType == "team-licence" %}Team Licence{% else %}Individual Purchase{% endif %}, {{ data.amount }}):</p>
+<blockquote>{{ data.reason }}</blockquote>
+<p>Any Platform Admin can decide it from the refunds queue.</p>
+<p>— The Cadence team</p>

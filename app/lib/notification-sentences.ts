@@ -47,6 +47,11 @@ const STATUS_CHANGE_VERB: Record<CourseStatus, string> = {
   [CourseStatus.Draft]: "moved",
 };
 
+const PURCHASE_TYPE_NAME: Record<"individual" | "team-licence", string> = {
+  individual: "Individual Purchase",
+  "team-licence": "Team Licence",
+};
+
 const describers: {
   [K in WorkflowKey]: (
     data: NotificationData<K>
@@ -69,6 +74,22 @@ const describers: {
   "new-enrollment": ({ actorName, courseTitle }) => ({
     icon: "enrollment",
     parts: [{ strong: actorName }, " enrolled on ", { strong: courseTitle }, "."],
+  }),
+  // ── New Refund Request (#13) ──
+  "new-refund-request": ({
+    actorName,
+    courseTitle,
+    purchaseType,
+    amount,
+    reason,
+  }) => ({
+    icon: "refund",
+    parts: [
+      { strong: actorName },
+      " asked for a Refund on ",
+      { strong: courseTitle },
+      ` (${PURCHASE_TYPE_NAME[purchaseType]}, ${amount}): "${reason}".`,
+    ],
   }),
   // ── Refund decisions (#12) ──
   "refund-request-approved": ({ courseTitle, amount }) => ({
