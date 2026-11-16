@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserRole } from "~/db/schema";
 import type { Notification } from "~/lib/notifications";
-import { sendNotifications, type KnockTrigger } from "./knock.server";
+import {
+  clearKnockDevelopmentUsers,
+  sendNotifications,
+  type KnockTrigger,
+  type KnockUserAdmin,
+} from "./knock.server";
 
 const roleChanged: Notification = {
   workflow: "role-changed",
@@ -93,5 +98,79 @@ describe("sendNotifications", () => {
     await expect(sendNotifications([roleChanged])).resolves.toBeUndefined();
 
     vi.unstubAllEnvs();
+  });
+});
+
+describe("clearKnockDevelopmentUsers", () => {
+  function fakeAdmin(userIds: string[], failOnDelete = false) {
+    const deleted: string[][] = [];
+    const admin: KnockUserAdmin = {
+      async *listUserIds() {
+        yield* userIds;
+      },
+      async bulkDelete(ids) {
+        if (failOnDelete) throw new Error("Knock is down");
+        deleted.push(ids);
+      },
+    };
+    return { admin, deleted };
+  }
+
+  it("deletes every user in Development, in bulk calls of at most 1,000", async () => {
+    const ids = Array.from({ length: 2500 }, (_, i) => String(i + 1));
+    const { admin, deleted } = fakeAdmin(ids);
+
+    const result = await clearKnockDevelopmentUsers({
+      apiKey: "sk_test_abc",
+      admin,
+    });
+
+    expect(result).toEqual({ status: "cleared", count: 2500 });
+    expect(deleted.map((batch) => batch.length)).toEqual([1000, 1000, 500]);
+    expect(deleted.flat()).toEqual(ids);
+  });
+
+  it("makes no delete call when there's nobody to delete", async () => {
+    const { admin, deleted } = fakeAdmin([]);
+
+    const result = await clearKnockDevelopmentUsers({
+      apiKey: "sk_test_abc",
+      admin,
+    });
+
+    expect(result).toEqual({ status: "cleared", count: 0 });
+    expect(deleted).toEqual([]);
+  });
+
+  it("skips without a secret key", async () => {
+    const { admin, deleted } = fakeAdmin(["1"]);
+
+    const result = await clearKnockDevelopmentUsers({ apiKey: "", admin });
+
+    expect(result).toMatchObject({ status: "skipped" });
+    expect(deleted).toEqual([]);
+  });
+
+  it("never touches an environment whose key isn't a test key", async () => {
+    const { admin, deleted } = fakeAdmin(["1"]);
+
+    const result = await clearKnockDevelopmentUsers({
+      apiKey: "sk_live_abc",
+      admin,
+    });
+
+    expect(result).toMatchObject({ status: "skipped" });
+    expect(deleted).toEqual([]);
+  });
+
+  it("reports a Knock failure instead of throwing it", async () => {
+    const { admin } = fakeAdmin(["1"], true);
+
+    const result = await clearKnockDevelopmentUsers({
+      apiKey: "sk_test_abc",
+      admin,
+    });
+
+    expect(result).toMatchObject({ status: "failed" });
   });
 });
