@@ -22,16 +22,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const migrationsFolder = path.resolve(__dirname, "../drizzle");
 
-// Runs under tsx, not Vite, so load .env for the Knock keys ourselves.
-const envFile = path.resolve(__dirname, "../.env");
-if (existsSync(envFile)) process.loadEnvFile(envFile);
-
-const sqlite = new Database("data.db");
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
-
-const db = drizzle(sqlite, { schema });
-
 // ─── Helpers ───
 
 function daysAgo(n: number): string {
@@ -67,7 +57,9 @@ function makeRandom(seed: number): () => number {
 
 // ─── Seed Data ───
 
-async function seed() {
+export async function seed(sqlite: Database.Database) {
+  const db = drizzle(sqlite, { schema });
+
   console.log("Seeding database...");
 
   // Drop and recreate tables for a clean seed
@@ -2907,4 +2899,23 @@ This course is still in draft while the cluster examples are rewritten against t
   }
 }
 
-seed().catch(console.error);
+// Touch data.db and .env only when run as a script, so a test can import
+// seed() and run it against an in-memory database.
+const isScript =
+  process.argv[1] !== undefined &&
+  path.resolve(process.argv[1]).toLowerCase() === __filename.toLowerCase();
+
+if (isScript) {
+  // Runs under tsx, not Vite, so load .env for the Knock keys ourselves.
+  const envFile = path.resolve(__dirname, "../.env");
+  if (existsSync(envFile)) process.loadEnvFile(envFile);
+
+  const sqlite = new Database("data.db");
+  sqlite.pragma("journal_mode = WAL");
+  sqlite.pragma("foreign_keys = ON");
+
+  seed(sqlite).catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
