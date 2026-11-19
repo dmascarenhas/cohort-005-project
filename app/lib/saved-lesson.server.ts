@@ -5,6 +5,13 @@ import { courses, lessons } from "~/db/schema";
 // Course. Bookmarks and Notes both select it, joined through modules to
 // courses.
 
+export type SavedLesson = {
+  id: number;
+  title: string;
+  courseTitle: string;
+  courseSlug: string;
+};
+
 export const savedLessonColumns = {
   id: lessons.id,
   title: lessons.title,

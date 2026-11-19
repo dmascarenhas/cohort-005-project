@@ -4,6 +4,7 @@ import { db } from "~/db";
 import { requireUserId } from "~/lib/access.server";
 import { listBookmarks } from "~/lib/bookmarks.server";
 import { listNotes } from "~/lib/notes.server";
+import type { SavedLesson } from "~/lib/saved-lesson.server";
 import { Card, CardContent } from "~/components/ui/card";
 import { Bookmark, NotebookPen } from "lucide-react";
 import { formatRelativeTime } from "~/lib/utils";
@@ -91,9 +92,6 @@ export default function Saved({ loaderData }: Route.ComponentProps) {
     </div>
   );
 }
-
-type SavedLesson =
-  Route.ComponentProps["loaderData"]["savedBookmarks"][number]["lesson"];
 
 /** A row on the Saved page: a link to the Lesson, named with its Course. */
 function SavedLessonCard({
